@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Lモンキーターン5 閉店考慮 期待値計算</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/nouislider@15.6.1/dist/nouislider.min.css" rel="stylesheet">
+  <style>
+    body { font-family: "Segoe UI", sans-serif; padding: 20px; color:#333; }
+    h1 { margin-top:0; color:#c7b217; }
+    label { display: block; margin-top: 15px; font-weight: bold; }
+    select, input[type="number"] {
+      width: 100%; padding: 10px; margin-top: 5px;
+      border: 1px solid #ccc; border-radius: 6px; font-size:16px;
+    }
+    button {
+      width: 100%; padding: 12px; margin-top: 16px;
+      background: #c7b217; border: none; color: #fff; font-size: 18px; border-radius:8px; cursor:pointer;
+    }
+    button:hover { background: #a79b13; }
+
+    table {
+      width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 16px;
+    }
+    th, td {
+      border: 1px solid #ddd; padding: 10px; text-align: center;
+    }
+    th {
+      background: #c7b217; color: #fff; font-weight: bold;
+    }
+    tr:nth-child(even) { background: #f9f9f9; }
+
+    .conditions {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+      background: #fdfdfd;
+      text-align: left;
+    }
+    .conditions h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      color: #c7b217;
+    }
+    .conditions ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .conditions li {
+      margin-bottom: 5px;
+    }
+
+    #slider-container { margin-top: 10px; margin-bottom: 10px; }
+    .range-values { display: flex; justify-content: space-between; font-size: 14px; padding: 0 4px; }
+
+    .result-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 16px;
+      table-layout: fixed;   /* ✅ セル幅を均等にする */
+    }
+    .result-table th, .result-table td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+      width: 33%;           /* ✅ 3列なので均等に */
+    }
+    .result-table th {
+      background: #c7b217;
+      color: #fff;
+      font-weight: bold;
+    }
+    .result-table tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="container">
+  <a href="/" class="back-link">← トップページに戻る</a>
+
+  <h1>🎰 Lモンキーターン5 閉店時間・差枚数考慮 期待値計算ツール</h1>
+
+  <form method="POST">
+    <!-- 残り時間 -->
+    <label for="remaining">閉店までの残り時間（分）</label>
+    <input type="number" id="remaining" name="remaining" value="{{ filters['remaining'] }}" min="10" step="10" required>
+
+    <!-- 狙い -->
+    <label for="target">狙い</label>
+    <select id="target" name="target">
+      <option value="AT狙い" {% if filters['target']=="AT狙い" %}selected{% endif %}>AT狙い</option>
+    </select>
+
+    <!-- 前回AT -->
+    <label for="prev_at_status">前回AT状況</label>
+    <select id="prev_at_status" name="prev_at_status">
+      <option value="下位AT後" {% if filters['prev_at_status']=="下位AT後" %}selected{% endif %}>下位AT後</option>
+      <option value="青島vs波多野後" {% if filters['prev_at_status']=="青島vs波多野後" %}selected{% endif %}>青島vs波多野後</option>
+    </select>
+
+    <!-- 打ち始め -->
+    <label for="start">打ち始め（G）</label>
+    <input type="number" id="start" name="start" value="{{ filters['start'] }}" min="0" step="10" required>
+
+    <!-- 前回有利差枚（スライダー） -->
+    <label>前回有利差枚</label>
+    <div id="slider-container"></div>
+    <div class="range-values">
+      <span id="range-min">{{ filters['差枚_min'] }}</span>
+      <span id="range-max">{{ filters['差枚_max'] }}</span>
+    </div>
+    <input type="hidden" name="差枚_min" id="差枚_min" value="{{ filters['差枚_min'] }}">
+    <input type="hidden" name="差枚_max" id="差枚_max" value="{{ filters['差枚_max'] }}">
+
+    <button type="submit">▶ 期待値を計算</button>
+  </form>
+
+{% if show_result %}
+  <h2>📊 結果一覧</h2>
+
+  <table class="result-table">
+    <tr>
+      <th>機械割</th>
+      <th>サンプル数</th>
+      <th>平均獲得枚数</th>
+    </tr>
+    <tr>
+      <td>{{ result["機械割(%)"] }}%</td>
+      <td>{{ result["サンプル数"] }}件</td>
+      <td>{{ result["平均獲得枚数"] }}枚</td>
+    </tr>
+  </table>
+
+  <!-- ✅ 計算条件 -->
+  <div class="conditions">
+    <h3>【計算条件】</h3>
+    <ul>
+      <li>0G~打ち始め以外は、打ち始めから20G以内の当選を除外</li>
+      <li>前回AT状況、モード示唆は不問</li>
+      <li>通常時の平均回転数は32.0G/50枚</li>
+      <li>AT後は即ヤメ</li>
+      <li>平均AT純増は3.0枚/Gと仮定</li>
+      <li>1時間の回転数は800回転</li>
+    </ul>
+  </div>
+{% endif %}
+
+
+  <script src="https://cdn.jsdelivr.net/npm/nouislider@15.6.1/dist/nouislider.min.js"></script>
+  <script>
+    // 前回有利差枚スライダー
+    const slider = document.createElement('div');
+    document.getElementById('slider-container').appendChild(slider);
+
+    noUiSlider.create(slider, {
+      start: [{{ filters['差枚_min'] }}, {{ filters['差枚_max'] }}],
+      connect: true,
+      range: { min: -10000, max: 2500 },
+      step: 250
+    });
+
+    const minInput = document.getElementById('差枚_min');
+    const maxInput = document.getElementById('差枚_max');
+    const rangeMin = document.getElementById('range-min');
+    const rangeMax = document.getElementById('range-max');
+
+    slider.noUiSlider.on('update', function(values, handle) {
+      const val = Math.round(values[handle]);
+      if (handle === 0) {
+        minInput.value = val;
+        rangeMin.textContent = val;
+      } else {
+        maxInput.value = val;
+        rangeMax.textContent = val;
+      }
+    });
+  </script>
+</body>
+</html>
