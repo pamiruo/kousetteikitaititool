@@ -124,18 +124,28 @@
 {% if show_result %}
   <h2>📊 結果一覧</h2>
 
-  <table class="result-table">
-    <tr>
-      <th>機械割</th>
-      <th>サンプル数</th>
-      <th>平均獲得枚数</th>
-    </tr>
-    <tr>
-      <td>{{ result["機械割(%)"] }}%</td>
-      <td>{{ result["サンプル数"] }}件</td>
-      <td>{{ result["平均獲得枚数"] }}枚</td>
-    </tr>
-  </table>
+<table class="result-table">
+  <tr>
+    <th>機械割</th>
+    <th>サンプル数</th>
+    <th>
+      <span style="display:block;">平均</span>
+      <span style="display:block;">獲得枚数</span>
+    </th>
+  </tr>
+  <tr>
+    <td>{{ result["機械割(%)"] }}%</td>
+    <td>{{ result["サンプル数"] }}件</td>
+    <td>{{ result["平均獲得枚数"] }}枚</td>
+  </tr>
+</table>
+
+
+    {% if result.get("note") %}
+      <p style="color:red; font-weight:bold; margin-top:10px;">
+        {{ result["note"] }}
+      </p>
+    {% endif %}
 
   <!-- ✅ 計算条件 -->
   <div class="conditions">

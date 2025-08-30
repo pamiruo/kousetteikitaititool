@@ -114,9 +114,17 @@ def _calc_cz(df: pd.DataFrame, payout_col: str,
     denom = (seiki_get / JUNZOU) * 3 + (cz_hatsu + at_rate * YAME) * 3
     rate = "-" if denom <= 0 else round(numer / denom * 100, 1)
 
-    return {"機械割(%)": rate, "サンプル数": int(cz_tousen_sample),
-            "平均獲得枚数": round(cz_get, 1),
-            "AT当選サンプル": int(at_tousen_sample), "AT当選率": round(at_rate, 6)}
+    # 結果まとめ
+    result = {"機械割(%)": rate, "サンプル数": int(cz_tousen_sample),
+              "平均獲得枚数": round(cz_get, 1)}
+
+    # ✅ サンプル数チェック
+    if result["サンプル数"] <= 50:
+        result["機械割(%)"] = "-"
+        result["平均獲得枚数"] = "-"
+        result["note"] = "サンプルが50件以下のため非表示"
+
+    return result
 
 
 # ====== AT狙い ======
@@ -174,11 +182,17 @@ def _calc_at(df: pd.DataFrame, payout_col: str, at_interval_col: str,
     denom = ((seiki_get + hiatari_get) / JUNZOU) * 3 + (avg_normal_g + YAME) * 3
     rate = "-" if denom <= 0 else round(numer / denom * 100, 1)
 
-    return {
-        "機械割(%)": rate,
-        "サンプル数": int(at_tousen_sample),
-        "平均獲得枚数": round(at_get, 1)
-    }
+    # 結果まとめ
+    result = {"機械割(%)": rate, "サンプル数": int(at_tousen_sample),
+              "平均獲得枚数": round(at_get, 1)}
+
+    # ✅ サンプル数チェック
+    if result["サンプル数"] <= 50:
+        result["機械割(%)"] = "-"
+        result["平均獲得枚数"] = "-"
+        result["note"] = "サンプルが50件以下のため非表示"
+
+    return result
 
 
 
@@ -235,9 +249,17 @@ def _calc_hikimodoshi_like(df: pd.DataFrame, g_threshold: int,
     denom = (h_avg_get / JUNZOU) * 3 + (h_avg_g + h_rate * at_rate * YAME) * 3
     rate = "-" if denom <= 0 else round(numer / denom * 100, 1)
 
-    return {"機械割(%)": rate, "サンプル数": int(h_tousen_sample),
-            "平均獲得枚数": round(h_get, 1),
-            "AT当選サンプル": int(at_tousen_sample), "AT当選率": round(at_rate, 6)}
+    # 結果まとめ
+    result = {"機械割(%)": rate, "サンプル数": int(h_tousen_sample),
+              "平均獲得枚数": round(h_get, 1)}
+
+    # ✅ サンプル数チェック
+    if result["サンプル数"] <= 50:
+        result["機械割(%)"] = "-"
+        result["平均獲得枚数"] = "-"
+        result["note"] = "サンプルが50件以下のため非表示"
+
+    return result
 
 
 # ====== Flask ハンドラ ======
