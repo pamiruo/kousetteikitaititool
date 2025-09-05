@@ -77,6 +77,49 @@
       background: #f9f9f9;
     }
 
+    .custom-settings {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fdfdfd;
+    }
+
+    .custom-settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .custom-settings-header .title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #c7b217;
+    }
+
+    .custom-settings-header .reset-btn {
+      font-size: 12px;
+      padding: 6px 10px;
+      background: #c7b217;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      cursor: pointer;
+      width: auto;
+    }
+
+    .custom-settings-header .reset-btn:hover {
+      background: #a79b13;
+    }
+
+    #slider-container {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    padding: 0 40px;   /* 左右に20pxの余白 */
+    box-sizing: border-box; /* 余白を含めて幅を計算 */
+  }
+
   </style>
 </head>
 <body>
@@ -109,7 +152,7 @@
     <input type="number" id="start" name="start" value="{{ filters['start'] }}" min="0" step="10" required>
 
     <!-- 前回有利差枚（スライダー） -->
-    <label>前回有利差枚</label>
+    <label>前回有利差枚範囲</label>
     <div id="slider-container"></div>
     <div class="range-values">
       <span id="range-min">{{ filters['差枚_min'] }}</span>
@@ -118,28 +161,73 @@
     <input type="hidden" name="差枚_min" id="差枚_min" value="{{ filters['差枚_min'] }}">
     <input type="hidden" name="差枚_max" id="差枚_max" value="{{ filters['差枚_max'] }}">
 
+    <!-- ✅ 注意書きを追加 -->
+    <p style="font-size:13px; color:#c00; margin-top:8px;">
+      ※現在の差枚数付近で範囲を絞ると、より実態に近く計算できます。
+    </p>
+
+    <!-- ✅ カスタム設定ブロック -->
+    <div class="custom-settings">
+      <!-- タイトル行（タイトル + 一括デフォルトボタン） -->
+      <div class="custom-settings-header">
+        <span class="title">カスタム設定</span>
+        <button type="button" class="reset-btn" onclick="resetDefaults()">一括デフォルト</button>
+      </div>
+
+      <!-- 注意書き：タイトル行の下に配置 -->
+      <p style="font-size:13px; color:#c00; margin-top:8px; margin-bottom:10px;">
+        ※初期値デフォルト　任意に設定できます。
+      </p>
+
+    <label for="coin_mochi">コイン持ち（50枚あたりG数）</label>
+    <select id="coin_mochi" name="coin_mochi">
+      <!-- 32 〜 28 を 1 刻みで降順 -->
+      {% for i in range(32, 27, -1) %}
+        <option value="{{ i }}" {% if filters['coin_mochi']|float == i %}selected{% endif %}>{{ i }}</option>
+      {% endfor %}
+    </select>
+
+
+      <!-- AT純増 -->
+      <label for="junzou">AT純増（枚/G）</label>
+      <select id="junzou" name="junzou">
+        {% for j in range(25, 31) %}
+        {% set val = j/10 %}
+        <option value="{{ val }}" {% if filters['junzou']==val %}selected{% endif %}>{{ val }}</option>
+        {% endfor %}
+      </select>
+
+      <!-- 1時間あたりの回転数 -->
+      <label for="kai">1時間の回転数</label>
+      <select id="kai" name="kai">
+        {% for k in range(750, 851, 10) %}
+        <option value="{{ k }}" {% if filters['kai']==k %}selected{% endif %}>{{ k }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
     <button type="submit">▶ 期待値を計算</button>
   </form>
 
 {% if show_result %}
-  <h2>📊 結果一覧</h2>
+  <div id="result-section">
+    <h2>📊 結果一覧</h2>
 
-<table class="result-table">
-  <tr>
-    <th>機械割</th>
-    <th>サンプル数</th>
-    <th>
-      <span style="display:block;">平均</span>
-      <span style="display:block;">獲得枚数</span>
-    </th>
-  </tr>
-  <tr>
-    <td>{{ result["機械割(%)"] }}%</td>
-    <td>{{ result["サンプル数"] }}件</td>
-    <td>{{ result["平均獲得枚数"] }}枚</td>
-  </tr>
-</table>
-
+    <table class="result-table">
+      <tr>
+        <th>機械割</th>
+        <th>サンプル数</th>
+        <th>
+          <span style="display:block;">平均</span>
+          <span style="display:block;">獲得枚数</span>
+        </th>
+      </tr>
+      <tr>
+        <td>{{ result["機械割(%)"] }}%</td>
+        <td>{{ result["サンプル数"] }}件</td>
+        <td>{{ result["平均獲得枚数"] }}枚</td>
+      </tr>
+    </table>
 
     {% if result.get("note") %}
       <p style="color:red; font-weight:bold; margin-top:10px;">
@@ -147,17 +235,14 @@
       </p>
     {% endif %}
 
-  <!-- ✅ 計算条件 -->
-  <div class="conditions">
-    <h3>【計算条件】</h3>
-    <ul>
-      <li>0G~打ち始め以外は、打ち始めから20G以内の当選を除外</li>
-      <li>前回AT状況、モード示唆は不問</li>
-      <li>通常時の平均回転数は32.0G/50枚</li>
-      <li>AT後は即ヤメ</li>
-      <li>平均AT純増は3.0枚/Gと仮定</li>
-      <li>1時間の回転数は800回転</li>
-    </ul>
+    <div class="conditions">
+      <h3>【計算条件】</h3>
+      <ul>
+        <li>0G~打ち始め以外は、打ち始めから20G以内の当選を除外</li>
+        <li>前回AT状況、モード示唆は不問</li>
+        <li>AT後は即ヤメ</li>
+      </ul>
+    </div>
   </div>
 {% endif %}
 
@@ -171,7 +256,7 @@
     noUiSlider.create(slider, {
       start: [{{ filters['差枚_min'] }}, {{ filters['差枚_max'] }}],
       connect: true,
-      range: { min: -10000, max: 2500 },
+      range: { min: -5000, max: 2500 },
       step: 250
     });
 
@@ -190,6 +275,29 @@
         rangeMax.textContent = val;
       }
     });
+
+    // ✅ 一括デフォルト機能
+    function resetDefaults() {
+      document.getElementById("coin_mochi").value = "32";
+      document.getElementById("junzou").value = "3.0";
+      document.getElementById("kai").value = "800";
+    }
   </script>
+
+{% if show_result %}
+<script>
+  // 結果エリアまで自動スクロール（レイアウト安定後に実行）
+  (function() {
+    const el = document.getElementById('result-section');
+    if (!el) return;
+    // 2フレーム待ってからスクロール（スライダー等の描画が落ち着くのを待つ）
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  })();
+</script>
+{% endif %}
 </body>
 </html>

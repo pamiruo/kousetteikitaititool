@@ -5,13 +5,14 @@ import numpy as np
 import os
 
 # ====== 定数 ======
-COIN_MOCHI = 1.5625   # コイン持ち
-JUNZOU     = 3.0     # 純増
-YAME       = 0      # ヤメG
+DEFAULT_COIN = 32     # コイン持ち（50枚あたりのG数）
+DEFAULT_JUNZOU = 3.0  # AT純増
+DEFAULT_KAI = 800     # 1時間あたりの回転数
+
+YAME       = 0
 KAISHU     = 46
 KOUKAN     = 51
 TOKA       = 20
-KAI        = 800     # 1時間あたりの回転数（G/h）
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "monkeyturn5.csv")
 
@@ -65,17 +66,20 @@ def _map_suru_to_col_value(suru_input: int):
         return None
     return (n + 1) if n >= 0 else None
 
-def _calc_possible_spins(remaining_minutes: int) -> int:
+# ✅ KAI を引数で受け取る版に統一
+def _calc_possible_spins(remaining_minutes: int, KAI: int) -> int:
     return int((remaining_minutes / 60.0) * KAI)
 
 
 # ====== ボーナス狙い ======
-def _calc_cz(df: pd.DataFrame, payout_col: str,
+def _calc_cz(df: pd.DataFrame, payout_col: str, at_interval_col: str,
              *, start_g: int, through_input: int,
              diff_min: int, diff_max: int,
-             remaining_minutes: int) -> dict:
+             remaining_minutes: int,
+             COIN_MOCHI: float, JUNZOU: float, KAI: int,
+             prev_at_status: str = "下位AT後") -> dict:
 
-    kanou_cz = _calc_possible_spins(remaining_minutes)
+    kanou_cz = _calc_possible_spins(remaining_minutes, KAI)
     kanou_hosei_cz = kanou_cz + start_g
     suru_eq = _map_suru_to_col_value(through_input)
     tousen_jogai_val = 0 if start_g == 0 else 20
@@ -132,6 +136,7 @@ def _calc_at(df: pd.DataFrame, payout_col: str, at_interval_col: str,
              *, start_g: int, through_input: int,
              diff_min: int, diff_max: int,
              remaining_minutes: int,
+             COIN_MOCHI: float, JUNZOU: float, KAI: int,
              prev_at_status: str = "下位AT後") -> dict:
     """
     prev_at_status:
@@ -139,7 +144,7 @@ def _calc_at(df: pd.DataFrame, payout_col: str, at_interval_col: str,
       - "青島vs波多野後" → 有利フラグ 4
     """
 
-    kanou_at = _calc_possible_spins(remaining_minutes)
+    kanou_at = _calc_possible_spins(remaining_minutes, KAI)
     suru_eq = _map_suru_to_col_value(through_input)
     tousen_jogai_val = 0 if start_g == 0 else 20
     tousen_threshold = start_g + tousen_jogai_val
@@ -211,12 +216,14 @@ def _calc_at(df: pd.DataFrame, payout_col: str, at_interval_col: str,
 
 
 # ====== 引き戻し/天国ゾーン狙い 共通 ======
-def _calc_hikimodoshi_like(df: pd.DataFrame, g_threshold: int,
-                           *, start_g: int, through_input: int,
-                           diff_min: int, diff_max: int,
-                           remaining_minutes: int) -> dict:
+def _calc_hikimodoshi_like(df: pd.DataFrame, payout_col: str, at_interval_col: str,
+             *, start_g: int, through_input: int,
+             diff_min: int, diff_max: int,
+             remaining_minutes: int,
+             COIN_MOCHI: float, JUNZOU: float, KAI: int,
+             prev_at_status: str = "下位AT後") -> dict:
 
-    kanou = _calc_possible_spins(remaining_minutes)
+    kanou = _calc_possible_spins(remaining_minutes, KAI)
     suru_eq = _map_suru_to_col_value(through_input)
     tousen_jogai_val = 0 if start_g == 0 else 20
     tousen_threshold = start_g + tousen_jogai_val
@@ -279,32 +286,47 @@ def _calc_hikimodoshi_like(df: pd.DataFrame, g_threshold: int,
 # ====== Flask ハンドラ ======
 def monkeyturn5_handler():
     filters = {
-        "remaining": 180,
+        "remaining": 240,
         "target": "AT狙い",
         "through": 0,
         "start": 0,
-        "差枚_min": -10000,
+        "差枚_min": -5000,
         "差枚_max": 2500,
         "prev_at_status": "下位AT後",   # ✅ 初期値を追加
+        "coin_mochi": 32,   # ✅ デフォルト 
+        "junzou": 3.0,      # ✅ デフォルト 
+        "kai": 800          # ✅ デフォルト 
     }
     show_result = False
     result = None
 
     if request.method == "POST":
-        def _iget(name, default):
-            v = request.form.get(name, default)
-            try:
-                return int(v)
-            except Exception:
-                return default
+        if "reset_defaults" in request.form:
+            filters["coin_mochi"] = DEFAULT_COIN
+            filters["junzou"] = DEFAULT_JUNZOU
+            filters["kai"] = DEFAULT_KAI
+        else:
+            def _iget(name, default, cast=int):
+                v = request.form.get(name, default)
+                try:
+                    return cast(v)
+                except Exception:
+                    return default
 
-        filters["remaining"]      = _iget("remaining", filters["remaining"])
-        filters["target"]         = request.form.get("target", filters["target"])
-        filters["through"]        = _iget("through", filters["through"])
-        filters["start"]          = _iget("start", filters["start"])
-        filters["差枚_min"]       = _iget("差枚_min", filters["差枚_min"])
-        filters["差枚_max"]       = _iget("差枚_max", filters["差枚_max"])
-        filters["prev_at_status"] = request.form.get("prev_at_status", filters["prev_at_status"])  # ✅ 新フォーム値を保持
+            filters["remaining"] = _iget("remaining", filters["remaining"])
+            filters["target"]    = request.form.get("target", filters["target"])
+            filters["through"]   = _iget("through", filters["through"])
+            filters["start"]     = _iget("start", filters["start"])
+            filters["差枚_min"]  = _iget("差枚_min", filters["差枚_min"])
+            filters["差枚_max"]  = _iget("差枚_max", filters["差枚_max"])
+            filters["coin_mochi"] = _iget("coin_mochi", filters["coin_mochi"])
+            filters["junzou"]    = _iget("junzou", filters["junzou"], float)
+            filters["kai"]       = _iget("kai", filters["kai"])
+            filters["prev_at_status"] = request.form.get("prev_at_status", filters["prev_at_status"])  # ✅ 新フォーム値を保持
+
+        COIN_MOCHI = 50 / filters["coin_mochi"]
+        JUNZOU = filters["junzou"]
+        KAI = filters["kai"]
 
         path = CSV_PATH if os.path.exists(CSV_PATH) else os.path.join(os.getcwd(), "data", "tokyoguru.csv")
         df = _safe_read_csv(path)
@@ -315,17 +337,20 @@ def monkeyturn5_handler():
                             start_g=filters["start"], through_input=filters["through"],
                             diff_min=filters["差枚_min"], diff_max=filters["差枚_max"],
                             remaining_minutes=filters["remaining"],
-                            prev_at_status=filters["prev_at_status"])
+                            prev_at_status=filters["prev_at_status"],
+                            COIN_MOCHI=COIN_MOCHI, JUNZOU=JUNZOU, KAI=KAI)
         elif filters["target"] == "引き戻し狙い":
             result = _calc_hikimodoshi_like(df=df, g_threshold=70,
                                             start_g=filters["start"], through_input=filters["through"],
                                             diff_min=filters["差枚_min"], diff_max=filters["差枚_max"],
-                                            remaining_minutes=filters["remaining"])
+                                            remaining_minutes=filters["remaining"],
+                                            COIN_MOCHI=COIN_MOCHI, JUNZOU=JUNZOU, KAI=KAI)
         elif filters["target"] == "天国ゾーン狙い":
             result = _calc_hikimodoshi_like(df=df, g_threshold=140,
                                             start_g=filters["start"], through_input=filters["through"],
                                             diff_min=filters["差枚_min"], diff_max=filters["差枚_max"],
-                                            remaining_minutes=filters["remaining"])
+                                            remaining_minutes=filters["remaining"],
+                                            COIN_MOCHI=COIN_MOCHI, JUNZOU=JUNZOU, KAI=KAI)
         else:
             result = {"機械割(%)": "-", "サンプル数": 0,
                       "平均獲得枚数": 0.0,
