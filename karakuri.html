@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Lからくりサーカス 閉店考慮 期待値計算</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/nouislider@15.6.1/dist/nouislider.min.css" rel="stylesheet">
+<style>
+    body { font-family: "Segoe UI", sans-serif; padding: 20px; color:#333; }
+    h1 { margin-top:0; color:#c7b217; }
+    label { display: block; margin-top: 15px; font-weight: bold; }
+    select, input[type="number"] {
+      width: 100%; padding: 10px; margin-top: 5px;
+      border: 1px solid #ccc; border-radius: 6px; font-size:16px;
+    }
+    button {
+      width: 100%; padding: 12px; margin-top: 16px;
+      background: #c7b217; border: none; color: #fff; font-size: 18px; border-radius:8px; cursor:pointer;
+    }
+    button:hover { background: #a79b13; }
+
+    table {
+      width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 16px;
+    }
+    th, td {
+      border: 1px solid #ddd; padding: 10px; text-align: center;
+    }
+    th {
+      background: #c7b217; color: #fff; font-weight: bold;
+    }
+    tr:nth-child(even) { background: #f9f9f9; }
+
+    .conditions {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+      background: #fdfdfd;
+      text-align: left;
+    }
+    .conditions h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      color: #c7b217;
+    }
+    .conditions ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .conditions li {
+      margin-bottom: 5px;
+    }
+
+    #slider-container { margin-top: 10px; margin-bottom: 10px; }
+    .range-values { display: flex; justify-content: space-between; font-size: 14px; padding: 0 4px; }
+
+    .result-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 16px;
+      table-layout: fixed;
+    }
+    .result-table th, .result-table td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+      width: 33%;
+    }
+    .result-table th {
+      background: #c7b217;
+      color: #fff;
+      font-weight: bold;
+    }
+    .result-table tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+
+    .custom-settings {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fdfdfd;
+    }
+
+    .custom-settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .custom-settings-header .title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #c7b217;
+    }
+
+    .custom-settings-header .reset-btn {
+      font-size: 12px;
+      padding: 6px 10px;
+      background: #c7b217;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      cursor: pointer;
+      width: auto;
+    }
+
+    .custom-settings-header .reset-btn:hover {
+      background: #a79b13;
+    }
+
+    #slider-container {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    padding: 0 40px;   /* 左右に20pxの余白 */
+    box-sizing: border-box; /* 余白を含めて幅を計算 */
+  }
+
+  </style>
+</head>
+<body>
+
+  <div class="container">
+  <a href="/" class="back-link">← トップページに戻る</a>
+
+  <h1>🎰 Lからくりサーカス 閉店時間・差枚数考慮 期待値計算ツール</h1>
+
+  <form method="POST">
+    <!-- 残り時間 -->
+    <label for="remaining">閉店までの残り時間（分）</label>
+    <input type="number" id="remaining" name="remaining" value="{{ filters['remaining'] }}" min="10" step="10" required>
+
+    <!-- 狙い -->
+    <label for="target">狙い</label>
+    <select id="target" name="target">
+      <option value="CZ狙い" {% if filters['target']=="CZ狙い" %}selected{% endif %}>CZ狙い</option>
+      <option value="AT狙い" {% if filters['target']=="AT狙い" %}selected{% endif %}>AT狙い</option>
+      <option value="天国ゾーン狙い" {% if filters['target']=="天国ゾーン狙い" %}selected{% endif %}>天国ゾーン狙い</option>
+    </select>
+
+    <!-- 前回AT -->
+    <label for="prev_at_status">前回AT状況</label>
+    <select id="prev_at_status" name="prev_at_status">
+      <option value="下位AT後" {% if filters['prev_at_status']=="下位AT後" %}selected{% endif %}>下位AT後</option>
+      <option value="運命の一撃失敗後" {% if filters['prev_at_status']=="運命の一撃失敗後" %}selected{% endif %}>運命の一撃失敗後</option>
+    </select>
+
+    <!-- スルー回数 -->
+    <label for="through">スルー回数</label>
+    <select id="through" name="through">
+      {% for i in range(4) %}
+      <option value="{{ i }}" {% if filters['through']==i %}selected{% endif %}>{{ i }}</option>
+      {% endfor %}
+    </select>
+
+    <!-- 打ち始め -->
+    <label for="start">打ち始め（G）</label>
+    <input type="number" id="start" name="start" value="{{ filters['start'] }}" min="0" step="10" required>
+
+    <!-- 前回有利差枚（スライダー） -->
+    <label>前回有利差枚範囲</label>
+    <div id="slider-container"></div>
+    <div class="range-values">
+      <span id="range-min">{{ filters['差枚_min'] }}</span>
+      <span id="range-max">{{ filters['差枚_max'] }}</span>
+    </div>
+    <input type="hidden" name="差枚_min" id="差枚_min" value="{{ filters['差枚_min'] }}">
+    <input type="hidden" name="差枚_max" id="差枚_max" value="{{ filters['差枚_max'] }}">
+
+    <!-- ✅ 注意書きを追加 -->
+    <p style="font-size:13px; color:#c00; margin-top:8px;">
+      ※現在の差枚数付近で範囲を絞ると、より実態に近く計算できます。
+    </p>
+
+    <!-- ✅ カスタム設定ブロック -->
+    <div class="custom-settings">
+      <!-- タイトル行（タイトル + 一括デフォルトボタン） -->
+      <div class="custom-settings-header">
+        <span class="title">カスタム設定</span>
+        <button type="button" class="reset-btn" onclick="resetDefaults()">一括デフォルト</button>
+      </div>
+
+      <!-- 注意書き：タイトル行の下に配置 -->
+      <p style="font-size:13px; color:#c00; margin-top:8px; margin-bottom:10px;">
+        ※初期値デフォルト　任意に設定できます。
+      </p>
+
+    <label for="coin_mochi">コイン持ち（50枚あたりG数）</label>
+    <select id="coin_mochi" name="coin_mochi">
+      <!-- 先頭だけ 32.9 を固定表示 -->
+      <option value="32.9" {% if filters['coin_mochi']|float == 32.6 %}selected{% endif %}>32.9</option>
+      <!-- 32 〜 28 を 1 刻みで降順 -->
+      {% for i in range(32, 28, -1) %}
+        <option value="{{ i }}" {% if filters['coin_mochi']|float == i %}selected{% endif %}>{{ i }}</option>
+      {% endfor %}
+    </select>
+
+
+      <!-- AT純増 -->
+      <label for="junzou">AT純増（枚/G）</label>
+      <select id="junzou" name="junzou">
+        {% for j in range(27, 32) %}
+        {% set val = j/10 %}
+        <option value="{{ val }}" {% if filters['junzou']==val %}selected{% endif %}>{{ val }}</option>
+        {% endfor %}
+      </select>
+
+      <!-- 1時間あたりの回転数 -->
+      <label for="kai">1時間の回転数</label>
+      <select id="kai" name="kai">
+        {% for k in range(750, 851, 10) %}
+        <option value="{{ k }}" {% if filters['kai']==k %}selected{% endif %}>{{ k }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit">▶ 期待値を計算</button>
+  </form>
+
+{% if show_result %}
+  <div id="result-section">
+    <h2>📊 結果一覧</h2>
+
+    <table class="result-table">
+      <tr>
+        <th>機械割</th>
+        <th>サンプル数</th>
+        <th>
+          <span style="display:block;">平均</span>
+          <span style="display:block;">獲得枚数</span>
+        </th>
+      </tr>
+      <tr>
+        <td>{{ result["機械割(%)"] }}%</td>
+        <td>{{ result["サンプル数"] }}件</td>
+        <td>{{ result["平均獲得枚数"] }}枚</td>
+      </tr>
+    </table>
+
+    {% if result.get("note") %}
+      <p style="color:red; font-weight:bold; margin-top:10px;">
+        {{ result["note"] }}
+      </p>
+    {% endif %}
+
+    <div class="conditions">
+      <h3>【計算条件】</h3>
+      <ul>
+        <li>0G~打ち始め以外は、打ち始めから20G以内の当選を除外</li>
+        <li>前回AT状況、モード示唆は不問</li>
+        <li>CZ後、AT後は即ヤメ</li>
+        <li>天国ゾーン狙いは95Gまでフォロー</li>
+      </ul>
+    </div>
+  </div>
+{% endif %}
+
+
+  <script src="https://cdn.jsdelivr.net/npm/nouislider@15.6.1/dist/nouislider.min.js"></script>
+  <script>
+    // 前回有利差枚スライダー
+    const slider = document.createElement('div');
+    document.getElementById('slider-container').appendChild(slider);
+
+    noUiSlider.create(slider, {
+      start: [{{ filters['差枚_min'] }}, {{ filters['差枚_max'] }}],
+      connect: true,
+      range: { min: -5000, max: 2500 },
+      step: 250
+    });
+
+    const minInput = document.getElementById('差枚_min');
+    const maxInput = document.getElementById('差枚_max');
+    const rangeMin = document.getElementById('range-min');
+    const rangeMax = document.getElementById('range-max');
+
+    slider.noUiSlider.on('update', function(values, handle) {
+      const val = Math.round(values[handle]);
+      if (handle === 0) {
+        minInput.value = val;
+        rangeMin.textContent = val;
+      } else {
+        maxInput.value = val;
+        rangeMax.textContent = val;
+      }
+    });
+
+    // ✅ 一括デフォルト機能
+    function resetDefaults() {
+      document.getElementById("coin_mochi").value = "32.9";
+      document.getElementById("junzou").value = "3.0";
+      document.getElementById("kai").value = "800";
+    }
+  </script>
+
+{% if show_result %}
+<script>
+  // 結果エリアまで自動スクロール（レイアウト安定後に実行）
+  (function() {
+    const el = document.getElementById('result-section');
+    if (!el) return;
+    // 2フレーム待ってからスクロール（スライダー等の描画が落ち着くのを待つ）
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  })();
+</script>
+{% endif %}
+</body>
+</html>
